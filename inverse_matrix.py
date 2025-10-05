@@ -1,10 +1,11 @@
 """Matrix inversion program using determinant/adjugate and Gauss-Jordan methods."""
 from __future__ import annotations
 
-from copy import deepcopy
-from typing import List, Tuple
+from fractions import Fraction
+from typing import List, Sequence, Tuple, Union
 
 Matrix = List[List[float]]
+NumericMatrix = List[List[Union[float, Fraction]]]
 
 
 def read_int(prompt: str) -> int:
@@ -33,11 +34,11 @@ def read_matrix(n: int) -> Matrix:
     return matrix
 
 
-def copy_matrix(matrix: Matrix) -> Matrix:
-    return [row[:] for row in matrix]
+def copy_matrix(matrix: Sequence[Sequence[Union[float, Fraction]]]) -> List[List[Union[float, Fraction]]]:
+    return [list(row) for row in matrix]
 
 
-def minor(matrix: Matrix, i: int, j: int) -> Matrix:
+def minor(matrix: Sequence[Sequence[Union[float, Fraction]]], i: int, j: int) -> List[List[Union[float, Fraction]]]:
     return [
         [elem for col, elem in enumerate(row) if col != j]
         for row_idx, row in enumerate(matrix)
@@ -45,28 +46,28 @@ def minor(matrix: Matrix, i: int, j: int) -> Matrix:
     ]
 
 
-def determinant(matrix: Matrix) -> float:
+def determinant(matrix: Sequence[Sequence[Union[float, Fraction]]]) -> Union[float, Fraction]:
     n = len(matrix)
     if n == 1:
         return matrix[0][0]
     if n == 2:
         return matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0]
-    det = 0.0
+    det = matrix[0][0] * 0
     for j, elem in enumerate(matrix[0]):
         sign = -1 if j % 2 else 1
         det += sign * elem * determinant(minor(matrix, 0, j))
     return det
 
 
-def transpose(matrix: Matrix) -> Matrix:
+def transpose(matrix: Sequence[Sequence[Union[float, Fraction]]]) -> List[List[Union[float, Fraction]]]:
     return [list(col) for col in zip(*matrix)]
 
 
-def adjugate(matrix: Matrix) -> Matrix:
+def adjugate(matrix: Sequence[Sequence[Union[float, Fraction]]]) -> List[List[Union[float, Fraction]]]:
     n = len(matrix)
-    cofactors: Matrix = []
+    cofactors: List[List[Union[float, Fraction]]] = []
     for i in range(n):
-        cofactor_row = []
+        cofactor_row: List[Union[float, Fraction]] = []
         for j in range(n):
             cofactor = ((-1) ** (i + j)) * determinant(minor(matrix, i, j))
             cofactor_row.append(cofactor)
@@ -74,23 +75,36 @@ def adjugate(matrix: Matrix) -> Matrix:
     return transpose(cofactors)
 
 
-def inverse_via_adjugate(matrix: Matrix) -> Tuple[bool, Matrix | None]:
+def is_near_zero(value: Union[float, Fraction], tol: Union[float, Fraction]) -> bool:
+    return abs(value) <= tol
+
+
+def inverse_via_adjugate(
+    matrix: Sequence[Sequence[Union[float, Fraction]]],
+    tol: Union[float, Fraction] = 1e-12,
+) -> Tuple[bool, List[List[Union[float, Fraction]]] | None]:
     det = determinant(matrix)
-    if abs(det) < 1e-12:
+    if is_near_zero(det, tol):
         return False, None
     adj = adjugate(matrix)
     inv = [[elem / det for elem in row] for row in adj]
     return True, inv
 
 
-def gauss_jordan(matrix: Matrix) -> Tuple[bool, Matrix | None]:
+def gauss_jordan(
+    matrix: Sequence[Sequence[Union[float, Fraction]]],
+    tol: Union[float, Fraction] = 1e-12,
+) -> Tuple[bool, List[List[Union[float, Fraction]]] | None]:
     n = len(matrix)
-    aug = [row + [1.0 if i == idx else 0.0 for idx in range(n)] for i, row in enumerate(copy_matrix(matrix))]
+    work = copy_matrix(matrix)
+    zero = work[0][0] * 0
+    one = zero + 1
+    aug = [row + [one if i == idx else zero for idx in range(n)] for i, row in enumerate(work)]
 
     for col in range(n):
         pivot_row = max(range(col, n), key=lambda r: abs(aug[r][col]))
         pivot = aug[pivot_row][col]
-        if abs(pivot) < 1e-12:
+        if is_near_zero(pivot, tol):
             return False, None
         if pivot_row != col:
             aug[col], aug[pivot_row] = aug[pivot_row], aug[col]
@@ -100,7 +114,7 @@ def gauss_jordan(matrix: Matrix) -> Tuple[bool, Matrix | None]:
             if row == col:
                 continue
             factor = aug[row][col]
-            if abs(factor) < 1e-12:
+            if is_near_zero(factor, tol):
                 continue
             aug[row] = [elem - factor * piv for elem, piv in zip(aug[row], aug[col])]
 
@@ -108,17 +122,38 @@ def gauss_jordan(matrix: Matrix) -> Tuple[bool, Matrix | None]:
     return True, inverse
 
 
-def pretty_print_matrix(matrix: Matrix) -> None:
+def pretty_print_matrix(matrix: Sequence[Sequence[float]]) -> None:
     for row in matrix:
         print(" ".join(f"{value:10.6f}" for value in row))
 
 
-def matrices_equal(a: Matrix, b: Matrix, tol: float = 1e-6) -> bool:
+def format_fraction(value: Fraction) -> str:
+    return str(value.numerator) if value.denominator == 1 else f"{value.numerator}/{value.denominator}"
+
+
+def pretty_print_fraction_matrix(matrix: Sequence[Sequence[Fraction]]) -> None:
+    for row in matrix:
+        print(" ".join(f"{format_fraction(value):>10}" for value in row))
+
+
+def matrices_equal(
+    a: Sequence[Sequence[Union[float, Fraction]]],
+    b: Sequence[Sequence[Union[float, Fraction]]],
+    tol: Union[float, Fraction] = 1e-6,
+) -> bool:
     for row_a, row_b in zip(a, b):
         for val_a, val_b in zip(row_a, row_b):
             if abs(val_a - val_b) > tol:
                 return False
     return True
+
+
+def is_integer_matrix(matrix: Sequence[Sequence[float]]) -> bool:
+    return all(all(value.is_integer() for value in row) for row in matrix)
+
+
+def convert_to_fraction_matrix(matrix: Sequence[Sequence[float]]) -> List[List[Fraction]]:
+    return [[Fraction(int(value)) for value in row] for row in matrix]
 
 
 def main() -> None:
@@ -132,20 +167,33 @@ def main() -> None:
     print("\n--- 행렬식/여인수법을 이용한 역행렬 ---")
     det_success, det_inverse = inverse_via_adjugate(matrix)
     if det_success and det_inverse is not None:
-        pretty_print_matrix(det_inverse)
+        pretty_print_matrix(det_inverse)  # type: ignore[arg-type]
     else:
         print("행렬식이 0이어서 역행렬이 존재하지 않습니다.")
 
     print("\n--- 가우스-조던 소거법을 이용한 역행렬 ---")
     gj_success, gj_inverse = gauss_jordan(matrix)
     if gj_success and gj_inverse is not None:
-        pretty_print_matrix(gj_inverse)
+        pretty_print_matrix(gj_inverse)  # type: ignore[arg-type]
     else:
         print("가우스-조던 소거법으로 역행렬을 구할 수 없습니다 (특이 행렬).")
 
     if det_success and gj_success and det_inverse and gj_inverse:
         same = matrices_equal(det_inverse, gj_inverse)
         print("\n두 방법의 결과가 ", "동일합니다." if same else "다릅니다.")
+
+    if is_integer_matrix(matrix) and det_success and gj_success:
+        fraction_matrix = convert_to_fraction_matrix(matrix)
+        frac_det_success, frac_det_inverse = inverse_via_adjugate(fraction_matrix, tol=Fraction(0))
+        frac_gj_success, frac_gj_inverse = gauss_jordan(fraction_matrix, tol=Fraction(0))
+        if frac_det_success and frac_gj_success and frac_det_inverse and frac_gj_inverse:
+            print("\n--- 추가 기능: 정수 행렬에 대한 정밀 역행렬(분수) ---")
+            print("행렬식/여인수법 결과 (분수):")
+            pretty_print_fraction_matrix(frac_det_inverse)
+            print("\n가우스-조던 소거법 결과 (분수):")
+            pretty_print_fraction_matrix(frac_gj_inverse)
+            same_fraction = matrices_equal(frac_det_inverse, frac_gj_inverse, tol=Fraction(0))
+            print("\n분수 결과가 ", "동일합니다." if same_fraction else "다릅니다.")
 
 
 if __name__ == "__main__":
